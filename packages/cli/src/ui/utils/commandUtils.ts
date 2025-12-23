@@ -67,11 +67,16 @@ type TtyTarget = { stream: Writable; closeAfter: boolean } | null;
 
 const pickTty = (): TtyTarget => {
   // Prefer the controlling TTY to avoid interleaving escape sequences with piped stdout.
-  try {
-    const devTty = fs.createWriteStream('/dev/tty');
-    return { stream: devTty, closeAfter: true };
-  } catch {
-    // fall through
+  // Skip /dev/tty on Windows as it doesn't exist
+  if (process.platform !== 'win32') {
+    try {
+      // Check if /dev/tty exists and is writable before creating the stream
+      fs.accessSync('/dev/tty', fs.constants.W_OK);
+      const devTty = fs.createWriteStream('/dev/tty');
+      return { stream: devTty, closeAfter: true };
+    } catch {
+      // fall through
+    }
   }
   if (process.stderr?.isTTY)
     return { stream: process.stderr, closeAfter: false };

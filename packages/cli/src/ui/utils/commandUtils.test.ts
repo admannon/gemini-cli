@@ -33,6 +33,10 @@ vi.mock('child_process');
 // fs (for /dev/tty)
 const mockFs = vi.hoisted(() => ({
   createWriteStream: vi.fn(),
+  accessSync: vi.fn(),
+  constants: {
+    W_OK: 2, // Standard Node.js constant for write access
+  },
 }));
 vi.mock('node:fs', () => ({
   default: mockFs,
@@ -123,7 +127,7 @@ describe('commandUtils', () => {
     mockClipboardyWrite = clipboardy.write as Mock;
 
     // default: no /dev/tty available
-    mockFs.createWriteStream.mockImplementation(() => {
+    mockFs.accessSync.mockImplementation(() => {
       throw new Error('ENOENT');
     });
 
@@ -221,6 +225,7 @@ describe('commandUtils', () => {
     it('writes OSC-52 to /dev/tty when in SSH', async () => {
       const testText = 'abc';
       const tty = makeWritable({ isTTY: true });
+      mockFs.accessSync.mockReturnValue(undefined); // /dev/tty is accessible
       mockFs.createWriteStream.mockReturnValue(tty);
 
       process.env['SSH_CONNECTION'] = '1';
@@ -239,6 +244,7 @@ describe('commandUtils', () => {
     it('wraps OSC-52 for tmux', async () => {
       const testText = 'tmux-copy';
       const tty = makeWritable({ isTTY: true });
+      mockFs.accessSync.mockReturnValue(undefined); // /dev/tty is accessible
       mockFs.createWriteStream.mockReturnValue(tty);
 
       process.env['TMUX'] = '1';
@@ -258,6 +264,7 @@ describe('commandUtils', () => {
       // ensure payload > chunk size (240) so there are multiple chunks
       const testText = 'x'.repeat(1200);
       const tty = makeWritable({ isTTY: true });
+      mockFs.accessSync.mockReturnValue(undefined); // /dev/tty is accessible
       mockFs.createWriteStream.mockReturnValue(tty);
 
       process.env['STY'] = 'screen-session';
@@ -308,6 +315,7 @@ describe('commandUtils', () => {
 
     it('resolves on drain when backpressure occurs', async () => {
       const tty = makeWritable({ isTTY: true, writeReturn: false });
+      mockFs.accessSync.mockReturnValue(undefined); // /dev/tty is accessible
       mockFs.createWriteStream.mockReturnValue(tty);
       process.env['SSH_CONNECTION'] = '1';
 
@@ -320,6 +328,7 @@ describe('commandUtils', () => {
 
     it('propagates errors from OSC-52 write path', async () => {
       const tty = makeWritable({ isTTY: true, writeReturn: false });
+      mockFs.accessSync.mockReturnValue(undefined); // /dev/tty is accessible
       mockFs.createWriteStream.mockReturnValue(tty);
       process.env['SSH_CONNECTION'] = '1';
 
@@ -344,6 +353,7 @@ describe('commandUtils', () => {
 
     it('uses clipboardy when not in eligible env even if /dev/tty exists', async () => {
       const tty = makeWritable({ isTTY: true });
+      mockFs.accessSync.mockReturnValue(undefined); // /dev/tty is accessible
       mockFs.createWriteStream.mockReturnValue(tty);
       const text = 'local-terminal';
       mockClipboardyWrite.mockResolvedValue(undefined);
@@ -353,6 +363,46 @@ describe('commandUtils', () => {
       expect(mockClipboardyWrite).toHaveBeenCalledWith(text);
       expect(tty.write).not.toHaveBeenCalled();
       expect(tty.end).not.toHaveBeenCalled();
+    });
+
+    it('skips /dev/tty on Windows and falls back to stderr when in SSH', async () => {
+      const originalPlatform = mockProcess.platform;
+      mockProcess.platform = 'win32';
+
+      const stderrStream = makeWritable({ isTTY: true });
+      Object.defineProperty(process, 'stderr', {
+        value: stderrStream,
+        configurable: true,
+      });
+
+      process.env['SSH_CONNECTION'] = '1';
+      const testText = 'windows-ssh';
+
+      await copyToClipboard(testText);
+
+      const b64 = Buffer.from(testText, 'utf8').toString('base64');
+      const expected = `${ESC}]52;c;${b64}${BEL}`;
+
+      expect(stderrStream.write).toHaveBeenCalledWith(expected);
+      expect(mockFs.accessSync).not.toHaveBeenCalled(); // Should not attempt /dev/tty on Windows
+      expect(mockClipboardyWrite).not.toHaveBeenCalled();
+
+      mockProcess.platform = originalPlatform;
+    });
+
+    it('skips /dev/tty on Windows and uses clipboardy when no TTY available', async () => {
+      const originalPlatform = mockProcess.platform;
+      mockProcess.platform = 'win32';
+
+      const testText = 'windows-no-tty';
+      mockClipboardyWrite.mockResolvedValue(undefined);
+
+      await copyToClipboard(testText);
+
+      expect(mockFs.accessSync).not.toHaveBeenCalled(); // Should not attempt /dev/tty on Windows
+      expect(mockClipboardyWrite).toHaveBeenCalledWith(testText);
+
+      mockProcess.platform = originalPlatform;
     });
   });
 

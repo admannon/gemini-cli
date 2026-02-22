@@ -195,48 +195,6 @@ export const getCachedStringWidth = (str: string): number => {
   return width;
 };
 
-// Segmenter for computing per-code-point visual widths via grapheme clustering.
-// Created once at module level for performance (Intl.Segmenter instantiation is costly).
-const _graphemeSegmenter = new Intl.Segmenter();
-const cpWidthsCache = new LRUCache<string, number[]>(LRU_BUFFER_PERF_CACHE_LIMIT);
-
-/**
- * Returns an array of visual column widths for each code point in a string.
- *
- * Code points that are not the first in their grapheme cluster are assigned
- * width 0. For example, Thai sara am (ำ, U+0E33) combines with the preceding
- * consonant to form a single grapheme cluster (e.g. "ทำ"), so its individual
- * contribution is 0 rather than 1. This keeps the per-code-point width sum
- * consistent with the total width reported by string-width.
- */
-export function getCodePointWidths(str: string): number[] {
-  if (!str) return [];
-
-  const cached = cpWidthsCache.get(str);
-  if (cached !== undefined) return cached;
-
-  const codePoints = toCodePoints(str);
-  const result = new Array<number>(codePoints.length).fill(0);
-
-  if (isAscii(str)) {
-    // ASCII-only strings have no combining characters; avoid segmenter overhead.
-    for (let i = 0; i < codePoints.length; i++) {
-      result[i] = getCachedStringWidth(codePoints[i]);
-    }
-  } else {
-    let cpIdx = 0;
-    for (const { segment } of _graphemeSegmenter.segment(str)) {
-      const segCpLen = toCodePoints(segment).length;
-      // Only the first code point of each cluster gets the cluster's full width.
-      result[cpIdx] = getCachedStringWidth(segment);
-      cpIdx += segCpLen;
-    }
-  }
-
-  cpWidthsCache.set(str, result);
-  return result;
-}
-
 const regex = ansiRegex();
 
 /* Recursively traverses a JSON-like structure (objects, arrays, primitives)

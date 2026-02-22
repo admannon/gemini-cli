@@ -26,7 +26,6 @@ import {
   cpSlice,
   stripUnsafeCharacters,
   getCachedStringWidth,
-  getCodePointWidths,
 } from '../../utils/textUtils.js';
 import { parsePastedPaths } from '../../utils/clipboardUtils.js';
 import type { Key } from '../../contexts/KeypressContext.js';
@@ -1339,7 +1338,6 @@ function calculateLayout(
       // Non-empty logical line
       let currentPosInLogLine = 0; // Tracks position within the current logical line (code point index)
       const codePointsInLogLine = toCodePoints(transformedLine);
-      const cpVisualWidths = getCodePointWidths(transformedLine);
 
       while (currentPosInLogLine < codePointsInLogLine.length) {
         let currentChunk = '';
@@ -1351,7 +1349,7 @@ function calculateLayout(
         // Iterate through code points to build the current visual line (chunk)
         for (let i = currentPosInLogLine; i < codePointsInLogLine.length; i++) {
           const char = codePointsInLogLine[i];
-          const charVisualWidth = cpVisualWidths[i];
+          const charVisualWidth = getCachedStringWidth(char);
 
           if (currentChunkVisualWidth + charVisualWidth > viewportWidth) {
             // Character would exceed viewport width
@@ -3361,12 +3359,11 @@ export function useTextBuffer({
 
         // Handle wide characters: convert visual X position to character offset
         const codePoints = toCodePoints(visualLine);
-        const cpWidths = getCodePointWidths(visualLine);
         let currentVisX = 0;
         let charOffset = 0;
 
-        for (let i = 0; i < codePoints.length; i++) {
-          const charWidth = cpWidths[i];
+        for (const char of codePoints) {
+          const charWidth = getCachedStringWidth(char);
           // If the click is within this character
           if (visCol < currentVisX + charWidth) {
             // Check if we clicked the second half of a wide character
@@ -3434,12 +3431,11 @@ export function useTextBuffer({
 
       // Handle wide characters: convert visual X position to character offset
       const codePoints = toCodePoints(visualLine);
-      const cpWidths = getCodePointWidths(visualLine);
       let currentVisX = 0;
       let charOffset = 0;
 
-      for (let i = 0; i < codePoints.length; i++) {
-        const charWidth = cpWidths[i];
+      for (const char of codePoints) {
+        const charWidth = getCachedStringWidth(char);
         if (visCol < currentVisX + charWidth) {
           if (charWidth > 1 && visCol >= currentVisX + charWidth / 2) {
             charOffset++;

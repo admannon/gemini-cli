@@ -13,6 +13,7 @@ import {
   escapeAnsiCtrlCodes,
   stripUnsafeCharacters,
   getCachedStringWidth,
+  getCodePointWidths,
   sanitizeForDisplay,
 } from './textUtils.js';
 
@@ -54,6 +55,60 @@ describe('textUtils', () => {
     it('should handle unicode characters that crash string-width with ANSI codes', () => {
       const charWithAnsi = '\u001b[31m' + '؂' + '\u001b[0m';
       expect(getCachedStringWidth(charWithAnsi)).toBe(1);
+    });
+  });
+
+  describe('getCodePointWidths', () => {
+    it('should return empty array for empty string', () => {
+      expect(getCodePointWidths('')).toEqual([]);
+    });
+
+    it('should return width 1 for each ASCII printable character', () => {
+      expect(getCodePointWidths('abc')).toEqual([1, 1, 1]);
+    });
+
+    it('should return width 2 for CJK characters', () => {
+      expect(getCodePointWidths('世界')).toEqual([2, 2]);
+    });
+
+    it('should assign 0 to Thai sara am (ำ) when following a consonant', () => {
+      // "ทำ" is one grapheme cluster; only ท contributes visual width
+      const widths = getCodePointWidths('ทำ');
+      expect(widths).toHaveLength(2);
+      expect(widths[0]).toBe(1); // ท contributes width 1 as cluster head
+      expect(widths[1]).toBe(0); // ำ is the non-first code point in the cluster
+    });
+
+    it('should correctly compute widths for Thai word ทำงาน', () => {
+      // ทำ is one cluster (width 1), ง, า, น are individual (width 1 each)
+      const widths = getCodePointWidths('ทำงาน');
+      expect(widths).toHaveLength(5);
+      expect(widths[0]).toBe(1); // ท (cluster head of ทำ)
+      expect(widths[1]).toBe(0); // ำ (non-first in cluster)
+      expect(widths[2]).toBe(1); // ง
+      expect(widths[3]).toBe(1); // า
+      expect(widths[4]).toBe(1); // น
+    });
+
+    it('should sum to the same total as getCachedStringWidth for Thai text', () => {
+      const text = 'ทำงาน';
+      const widths = getCodePointWidths(text);
+      const sum = widths.reduce((a, b) => a + b, 0);
+      expect(sum).toBe(getCachedStringWidth(text));
+    });
+
+    it('should handle mixed ASCII and Thai text', () => {
+      const text = 'Hi ทำ!';
+      const widths = getCodePointWidths(text);
+      // H, i, space = 1 each; ท = 1, ำ = 0; ! = 1
+      expect(widths).toEqual([1, 1, 1, 1, 0, 1]);
+    });
+
+    it('should sum to getCachedStringWidth for emoji', () => {
+      const text = '🎉';
+      const widths = getCodePointWidths(text);
+      const sum = widths.reduce((a, b) => a + b, 0);
+      expect(sum).toBe(getCachedStringWidth(text));
     });
   });
 

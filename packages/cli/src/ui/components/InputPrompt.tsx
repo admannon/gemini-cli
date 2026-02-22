@@ -25,7 +25,6 @@ import {
   cpLen,
   toCodePoints,
   cpIndexToOffset,
-  getCachedStringWidth,
   getStringDisplayWidth,
 } from '../utils/textUtils.js';
 import chalk from 'chalk';
@@ -1290,7 +1289,7 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
               let splitIndex = 0;
               for (let i = 0; i < wordCP.length; i++) {
                 const char = wordCP[i];
-                const charWidth = getCachedStringWidth(char);
+                const charWidth = getStringDisplayWidth(char);
                 if (partWidth + charWidth > inputWidth) {
                   break;
                 }

@@ -195,6 +195,50 @@ export const getCachedStringWidth = (str: string): number => {
   return width;
 };
 
+// Segmenter for grapheme cluster segmentation (module-level for performance).
+const _graphemeSegmenter = new Intl.Segmenter();
+// Extended pictographic regex to detect emoji clusters (ZWJ, skin-tone sequences, etc.)
+const _emojiClusterRegex = /\p{Extended_Pictographic}/u;
+
+/**
+ * Calculates the display width of a string for terminal rendering.
+ *
+ * Compared to `getCachedStringWidth` (which calls string-width on the whole
+ * string), this function correctly handles characters like Thai sara am (ำ,
+ * U+0E33) that form grapheme clusters with the preceding consonant via
+ * Intl.Segmenter yet still occupy their own terminal column (width 1 each).
+ *
+ * Strategy per grapheme cluster:
+ * - Single code point: delegate to getCachedStringWidth.
+ * - Multi-code-point emoji cluster (ZWJ sequences, skin-tone modifiers):
+ *   use cluster-level width so the whole sequence counts as 2 columns.
+ * - Multi-code-point non-emoji cluster (e.g. "ทำ"): sum per-code-point widths
+ *   so each character contributes its own terminal column.
+ */
+export function getStringDisplayWidth(str: string): number {
+  if (!str) return 0;
+  if (isAscii(str)) return str.length;
+
+  let width = 0;
+  for (const { segment } of _graphemeSegmenter.segment(str)) {
+    const cps = toCodePoints(segment);
+    if (cps.length === 1) {
+      width += getCachedStringWidth(segment);
+    } else if (_emojiClusterRegex.test(segment)) {
+      // Emoji clusters (ZWJ sequences, skin-tone, etc.): treat as one unit
+      width += getCachedStringWidth(segment);
+    } else {
+      // Multi-code-point non-emoji cluster: sum per code point so that
+      // SpacingMark characters (Thai sara am, etc.) each count as their
+      // own terminal column.
+      for (const cp of cps) {
+        width += getCachedStringWidth(cp);
+      }
+    }
+  }
+  return width;
+}
+
 const regex = ansiRegex();
 
 /* Recursively traverses a JSON-like structure (objects, arrays, primitives)

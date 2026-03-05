@@ -13,6 +13,7 @@ import {
   escapeAnsiCtrlCodes,
   stripUnsafeCharacters,
   getCachedStringWidth,
+  getStringDisplayWidth,
   sanitizeForDisplay,
 } from './textUtils.js';
 
@@ -54,6 +55,49 @@ describe('textUtils', () => {
     it('should handle unicode characters that crash string-width with ANSI codes', () => {
       const charWithAnsi = '\u001b[31m' + '؂' + '\u001b[0m';
       expect(getCachedStringWidth(charWithAnsi)).toBe(0);
+    });
+  });
+
+  describe('getStringDisplayWidth', () => {
+    it('should return 0 for empty string', () => {
+      expect(getStringDisplayWidth('')).toBe(0);
+    });
+
+    it('should return correct width for ASCII', () => {
+      expect(getStringDisplayWidth('hello')).toBe(5);
+    });
+
+    it('should return 2 for CJK wide characters', () => {
+      expect(getStringDisplayWidth('世界')).toBe(4);
+    });
+
+    it('should return 2 for Thai ทำ (sara am occupies its own terminal column)', () => {
+      expect(getStringDisplayWidth('ทำ')).toBe(2);
+    });
+
+    it('should return 5 for Thai word ทำงาน', () => {
+      expect(getStringDisplayWidth('ทำงาน')).toBe(5);
+    });
+
+    it('should return correct width for mixed ASCII and Thai text', () => {
+      expect(getStringDisplayWidth('Hi ทำ!')).toBe(6);
+    });
+
+    it('should return 2 for ZWJ emoji family sequence', () => {
+      // Emoji clusters are handled at cluster level via getCachedStringWidth,
+      // which delegates to string-width's RGI-emoji detection → width 2.
+      expect(getStringDisplayWidth('👨‍👩‍👧‍👦')).toBe(2);
+    });
+
+    it('should return 2 for emoji with skin tone modifier', () => {
+      // Skin-tone modifier sequences are detected as emoji clusters and
+      // handled at cluster level → width 2.
+      expect(getStringDisplayWidth('👍🏿')).toBe(2);
+    });
+
+    it('should handle Latin combining diacritics correctly', () => {
+      // Decomposed "é" (e + combining acute accent) should be width 1
+      expect(getStringDisplayWidth('e\u0301')).toBe(1);
     });
   });
 

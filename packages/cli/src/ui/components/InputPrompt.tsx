@@ -25,9 +25,9 @@ import {
   cpLen,
   toCodePoints,
   cpIndexToOffset,
+  getStringDisplayWidth,
 } from '../utils/textUtils.js';
 import chalk from 'chalk';
-import stringWidth from 'string-width';
 import { useShellHistory } from '../hooks/useShellHistory.js';
 import { useReverseSearchCompletion } from '../hooks/useReverseSearchCompletion.js';
 import {
@@ -536,7 +536,7 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
       if (!visualLine) return;
 
       // Even if we click past the end of the line, we might want to collapse an expanded paste
-      const isPastEndOfLine = relX >= stringWidth(visualLine);
+      const isPastEndOfLine = relX >= getStringDisplayWidth(visualLine);
 
       const logicalPos = isPastEndOfLine
         ? null
@@ -1292,7 +1292,7 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
     const cursorCol = buffer.cursor[1];
 
     const textBeforeCursor = cpSlice(currentLogicalLine, 0, cursorCol);
-    const usedWidth = stringWidth(textBeforeCursor);
+    const usedWidth = getStringDisplayWidth(textBeforeCursor);
     const remainingWidth = Math.max(0, inputWidth - usedWidth);
 
     const ghostTextLinesRaw = ghostSuffix.split('\n');
@@ -1301,7 +1301,7 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
     let inlineGhost = '';
     let remainingFirstLine = '';
 
-    if (stringWidth(firstLineRaw) <= remainingWidth) {
+    if (getStringDisplayWidth(firstLineRaw) <= remainingWidth) {
       inlineGhost = firstLineRaw;
     } else {
       const words = firstLineRaw.split(' ');
@@ -1309,7 +1309,7 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
       let wordIdx = 0;
       for (const word of words) {
         const prospectiveLine = currentLine ? `${currentLine} ${word}` : word;
-        if (stringWidth(prospectiveLine) > remainingWidth) {
+        if (getStringDisplayWidth(prospectiveLine) > remainingWidth) {
           break;
         }
         currentLine = prospectiveLine;
@@ -1337,7 +1337,7 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
 
         for (const word of words) {
           const prospectiveLine = currentLine ? `${currentLine} ${word}` : word;
-          const prospectiveWidth = stringWidth(prospectiveLine);
+          const prospectiveWidth = getStringDisplayWidth(prospectiveLine);
 
           if (prospectiveWidth > inputWidth) {
             if (currentLine) {
@@ -1345,14 +1345,14 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
             }
 
             let wordToProcess = word;
-            while (stringWidth(wordToProcess) > inputWidth) {
+            while (getStringDisplayWidth(wordToProcess) > inputWidth) {
               let part = '';
               const wordCP = toCodePoints(wordToProcess);
               let partWidth = 0;
               let splitIndex = 0;
               for (let i = 0; i < wordCP.length; i++) {
                 const char = wordCP[i];
-                const charWidth = stringWidth(char);
+                const charWidth = getStringDisplayWidth(char);
                 if (partWidth + charWidth > inputWidth) {
                   break;
                 }
@@ -1666,7 +1666,7 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
                   additionalLines.map((ghostLine, index) => {
                     const padding = Math.max(
                       0,
-                      inputWidth - stringWidth(ghostLine),
+                      inputWidth - getStringDisplayWidth(ghostLine),
                     );
                     return (
                       <Text
